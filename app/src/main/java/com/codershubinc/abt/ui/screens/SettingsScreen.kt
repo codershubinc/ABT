@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Autorenew
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DisplaySettings
 import androidx.compose.material.icons.rounded.Info
@@ -48,6 +49,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.codershubinc.abt.ui.components.DotGridBackground
 import com.codershubinc.abt.ui.components.InfoRow
 import com.codershubinc.abt.ui.components.ModernCard
 import com.codershubinc.abt.ui.components.NullVoidToggleRow
@@ -58,8 +60,10 @@ fun SettingsScreen(
     isPermissionGranted: Boolean,
     keepScreenOn: Boolean,
     autoLaunchWidget: Boolean,
+    autoSwitchAudioApps: Boolean = true,
     onKeepScreenOnChanged: (Boolean) -> Unit,
     onAutoLaunchWidgetChanged: (Boolean) -> Unit,
+    onAutoSwitchAudioAppsChanged: (Boolean) -> Unit = {},
     onNavigateToWidget: () -> Unit,
     onRefreshPermission: () -> Unit,
     modifier: Modifier = Modifier
@@ -213,6 +217,19 @@ fun SettingsScreen(
                         checked = autoLaunchWidget,
                         onCheckedChange = onAutoLaunchWidgetChanged
                     )
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        color = VoidDividerColor
+                    )
+
+                    NullVoidToggleRow(
+                        icon = Icons.Rounded.Autorenew,
+                        label = "Auto Switch Mode",
+                        description = "Auto-Switch Playing Audio Apps",
+                        checked = autoSwitchAudioApps,
+                        onCheckedChange = onAutoSwitchAudioAppsChanged
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -260,25 +277,6 @@ fun SettingsScreen(
                     letterSpacing = 1.5.sp
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun DotGridBackground(modifier: Modifier = Modifier) {
-    Canvas(modifier = modifier) {
-        val step = 32.dp.toPx()
-        val radius = 1.dp.toPx()
-        val color = Color.White.copy(alpha = 0.04f)
-
-        var x = 0f
-        while (x < size.width) {
-            var y = 0f
-            while (y < size.height) {
-                drawCircle(color = color, radius = radius, center = Offset(x, y))
-                y += step
-            }
-            x += step
         }
     }
 }
