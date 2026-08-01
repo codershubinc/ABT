@@ -11,6 +11,7 @@ import android.os.SystemClock
 import android.util.Log
 import com.codershubinc.abt.utils.AppIconUtils
 import com.codershubinc.abt.utils.AudioQualityUtils
+import com.codershubinc.abt.utils.KdeConnectUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -130,6 +131,40 @@ class MediaRepository private constructor() {
         updateActiveState(context)
     }
 
+    fun registerNotificationMediaController(context: Context, controller: MediaController) {
+        if (!activeControllers.any { it.packageName == controller.packageName }) {
+            val updated = activeControllers + controller
+            setActiveControllers(context, updated)
+        }
+    }
+
+    fun updateFromNotificationFallback(
+        context: Context?,
+        packageName: String,
+        title: String?,
+        text: String?,
+        subText: String?,
+        largeIcon: Bitmap?
+    ) {
+        if (activeController == null || activeController?.packageName == packageName) {
+            val isKde = KdeConnectUtils.isKdeConnect(packageName)
+            val appIcon = if (context != null) AppIconUtils.getAppIconBitmap(context, packageName) else null
+            val current = _mediaState.value
+
+            _mediaState.value = current.copy(
+                isPlaying = true,
+                title = title?.takeIf { it.isNotBlank() } ?: current.title,
+                artist = text?.takeIf { it.isNotBlank() } ?: current.artist,
+                remoteDeviceName = subText?.takeIf { it.isNotBlank() && !it.lowercase().contains("media control") } ?: current.remoteDeviceName,
+                artworkBitmap = largeIcon ?: current.artworkBitmap,
+                packageName = packageName,
+                appLabel = if (isKde) "KDE Connect" else current.appLabel,
+                appIconBitmap = appIcon ?: current.appIconBitmap,
+                hasActiveSession = true
+            )
+        }
+    }
+
     private fun updateActiveState(context: Context? = null) {
         if (activeControllers.isEmpty()) {
             clearActiveController()
@@ -139,7 +174,8 @@ class MediaRepository private constructor() {
         // Determine activeController based on mode
         if (isAutoMode) {
             val playingController = activeControllers.firstOrNull {
-                it.playbackState?.state == PlaybackState.STATE_PLAYING
+                it.playbackState?.state == PlaybackState.STATE_PLAYING ||
+                        KdeConnectUtils.isKdeConnectPlaybackActive(it.packageName, it.playbackState, it.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE))
             }
             if (playingController != null) {
                 activeController = playingController
@@ -155,7 +191,8 @@ class MediaRepository private constructor() {
                 isAutoMode = true
                 selectedPackageName = null
                 activeController = activeControllers.firstOrNull {
-                    it.playbackState?.state == PlaybackState.STATE_PLAYING
+                    it.playbackState?.state == PlaybackState.STATE_PLAYING ||
+                            KdeConnectUtils.isKdeConnectPlaybackActive(it.packageName, it.playbackState, it.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE))
                 } ?: activeControllers.firstOrNull()
             }
         }
@@ -171,7 +208,7 @@ class MediaRepository private constructor() {
                 ?: meta?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
             val artist = meta?.getString(MediaMetadata.METADATA_KEY_ARTIST)
                 ?: meta?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
-            val remoteDeviceName = AudioQualityUtils.extractRemoteDeviceName(meta, controller.extras ?: meta?.let { AudioQualityUtils.extractExtrasFromMetadata(it) })
+            val remoteDeviceName = KdeConnectUtils.extractRemoteDeviceName(meta, controller.extras ?: meta?.let { AudioQualityUtils.extractExtrasFromMetadata(it) })
 
             var appIcon = iconCache[pkg]
             var label: String? = null
@@ -254,24 +291,26 @@ class MediaRepository private constructor() {
         lastPlaybackState = pbState
         val ex = extras ?: controller.extras ?: meta?.let { AudioQualityUtils.extractExtrasFromMetadata(it) }
 
-        val isPlaying = pbState?.state == PlaybackState.STATE_PLAYING ||
-                pbState?.state == PlaybackState.STATE_FAST_FORWARDING ||
-                pbState?.state == PlaybackState.STATE_REWINDING
-
         val title = meta?.getString(MediaMetadata.METADATA_KEY_TITLE)
             ?: meta?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
         val artist = meta?.getString(MediaMetadata.METADATA_KEY_ARTIST)
             ?: meta?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
+            ?: meta?.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE)
             ?: meta?.getString(MediaMetadata.METADATA_KEY_AUTHOR)
             ?: meta?.getString(MediaMetadata.METADATA_KEY_WRITER)
             ?: meta?.getString(MediaMetadata.METADATA_KEY_COMPOSER)
         val album = meta?.getString(MediaMetadata.METADATA_KEY_ALBUM)
 
+        val isPlaying = pbState?.state == PlaybackState.STATE_PLAYING ||
+                pbState?.state == PlaybackState.STATE_FAST_FORWARDING ||
+                pbState?.state == PlaybackState.STATE_REWINDING ||
+                KdeConnectUtils.isKdeConnectPlaybackActive(controller.packageName, pbState, title)
+
         val artworkBitmap: Bitmap? = meta?.getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: meta?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
 
         val soundQuality = AudioQualityUtils.extractAudioQuality(meta, ex)
-        val remoteDeviceName = AudioQualityUtils.extractRemoteDeviceName(meta, ex)
+        val remoteDeviceName = KdeConnectUtils.extractRemoteDeviceName(meta, ex)
 
         val duration = meta?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
         val currentElapsed = SystemClock.elapsedRealtime()

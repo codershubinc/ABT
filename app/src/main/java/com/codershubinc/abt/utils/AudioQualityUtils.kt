@@ -49,35 +49,6 @@ object AudioQualityUtils {
         return null
     }
 
-    fun extractRemoteDeviceName(metadata: MediaMetadata?, extras: Bundle?): String? {
-        val candidateBundles = mutableListOf<Bundle>()
-        extras?.let { candidateBundles.add(it) }
-        metadata?.let { extractExtrasFromMetadata(it)?.let { b -> candidateBundles.add(b) } }
-
-        val targetKeys = listOf(
-            "device_name", "devicename", "remote_device", "remotedevice",
-            "device", "kdeconnect.device", "kdeconnect.device_name",
-            "com.kde.connect.device_name", "org.kde.kdeconnect.device_name",
-            "android.subtext"
-        )
-
-        for (bundle in candidateBundles) {
-            for (key in bundle.keySet()) {
-                val lowerKey = key.lowercase()
-                if (targetKeys.any { lowerKey.contains(it) }) {
-                    val value = bundle.get(key)
-                    if (value != null) {
-                        val strVal = value.toString().trim()
-                        if (strVal.isNotBlank() && strVal.lowercase() != "kde connect") {
-                            return strVal
-                        }
-                    }
-                }
-            }
-        }
-        return null
-    }
-
     fun extractExtrasFromMetadata(metadata: MediaMetadata): Bundle? {
         return try {
             val field = MediaMetadata::class.java.getDeclaredField("mBundle")

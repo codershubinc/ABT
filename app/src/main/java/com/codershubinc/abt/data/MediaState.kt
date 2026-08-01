@@ -56,16 +56,5 @@ data class MediaState(
         get() = soundQuality?.takeIf { it.isNotBlank() } ?: "no data"
 
     val displaySourceApp: String
-        get() {
-            if (packageName == "org.kde.kdeconnect_tp") {
-                return if (!remoteDeviceName.isNullOrBlank()) {
-                    "KDE CONNECT ($remoteDeviceName)"
-                } else {
-                    "KDE CONNECT"
-                }
-            }
-            return appLabel?.takeIf { it.isNotBlank() }
-                ?: packageName?.takeIf { it.isNotBlank() }
-                ?: "no data"
-        }
+        get() = com.codershubinc.abt.utils.KdeConnectUtils.formatSourceLabel(packageName, appLabel, remoteDeviceName)
 }
