@@ -8,7 +8,8 @@ data class MediaAppInfo(
     val iconBitmap: Bitmap? = null,
     val isPlaying: Boolean = false,
     val title: String? = null,
-    val artist: String? = null
+    val artist: String? = null,
+    val remoteDeviceName: String? = null
 )
 
 /**
@@ -32,6 +33,7 @@ data class MediaState(
     val packageName: String? = null,
     val appLabel: String? = null,
     val appIconBitmap: Bitmap? = null,
+    val remoteDeviceName: String? = null,
     val hasActiveSession: Boolean = false,
     val activeApps: List<MediaAppInfo> = emptyList(),
     val isAutoMode: Boolean = true,
@@ -55,7 +57,13 @@ data class MediaState(
 
     val displaySourceApp: String
         get() {
-            if (packageName == "org.kde.kdeconnect_tp") return "KDE CONNECT"
+            if (packageName == "org.kde.kdeconnect_tp") {
+                return if (!remoteDeviceName.isNullOrBlank()) {
+                    "KDE CONNECT ($remoteDeviceName)"
+                } else {
+                    "KDE CONNECT"
+                }
+            }
             return appLabel?.takeIf { it.isNotBlank() }
                 ?: packageName?.takeIf { it.isNotBlank() }
                 ?: "no data"

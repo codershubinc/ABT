@@ -171,6 +171,7 @@ class MediaRepository private constructor() {
                 ?: meta?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
             val artist = meta?.getString(MediaMetadata.METADATA_KEY_ARTIST)
                 ?: meta?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
+            val remoteDeviceName = AudioQualityUtils.extractRemoteDeviceName(meta, controller.extras ?: meta?.let { AudioQualityUtils.extractExtrasFromMetadata(it) })
 
             var appIcon = iconCache[pkg]
             var label: String? = null
@@ -196,7 +197,8 @@ class MediaRepository private constructor() {
                 iconBitmap = appIcon ?: iconCache[pkg],
                 isPlaying = isPlaying,
                 title = title,
-                artist = artist
+                artist = artist,
+                remoteDeviceName = remoteDeviceName
             )
         }
 
@@ -226,6 +228,7 @@ class MediaRepository private constructor() {
             packageName = null,
             appLabel = null,
             appIconBitmap = null,
+            remoteDeviceName = null,
             hasActiveSession = false,
             activeApps = emptyList(),
             isAutoMode = isAutoMode,
@@ -268,6 +271,7 @@ class MediaRepository private constructor() {
             ?: meta?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
 
         val soundQuality = AudioQualityUtils.extractAudioQuality(meta, ex)
+        val remoteDeviceName = AudioQualityUtils.extractRemoteDeviceName(meta, ex)
 
         val duration = meta?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
         val currentElapsed = SystemClock.elapsedRealtime()
@@ -313,6 +317,7 @@ class MediaRepository private constructor() {
             packageName = pkg,
             appLabel = appLabel ?: _mediaState.value.appLabel,
             appIconBitmap = appIcon ?: _mediaState.value.appIconBitmap,
+            remoteDeviceName = remoteDeviceName ?: _mediaState.value.remoteDeviceName,
             hasActiveSession = true,
             activeApps = appInfoList,
             isAutoMode = isAutoMode,

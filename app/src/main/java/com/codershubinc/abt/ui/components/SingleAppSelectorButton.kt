@@ -257,9 +257,15 @@ fun SingleAppSelectorButton(
                                     }
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Column {
+                                        val displayLabel = if (app.packageName == "org.kde.kdeconnect_tp") {
+                                            if (!app.remoteDeviceName.isNullOrBlank()) "KDE CONNECT (${app.remoteDeviceName})" else "KDE CONNECT"
+                                        } else {
+                                            app.appLabel
+                                        }
+
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                text = app.appLabel.uppercase(),
+                                                text = displayLabel.uppercase(),
                                                 color = if (isSelectedApp) accentColor else Color.White,
                                                 fontSize = 12.sp,
                                                 fontFamily = FontFamily.Monospace,
