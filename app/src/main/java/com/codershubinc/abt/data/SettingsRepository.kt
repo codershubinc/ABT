@@ -18,6 +18,9 @@ class SettingsRepository(private val context: Context) {
     private val _autoLaunchWidget = MutableStateFlow(prefs.getBoolean(KEY_AUTO_LAUNCH, true))
     val autoLaunchWidget: StateFlow<Boolean> = _autoLaunchWidget.asStateFlow()
 
+    private val _autoSwitchAudioApps = MutableStateFlow(prefs.getBoolean(KEY_AUTO_SWITCH_AUDIO_APPS, true))
+    val autoSwitchAudioApps: StateFlow<Boolean> = _autoSwitchAudioApps.asStateFlow()
+
     fun setKeepScreenOn(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_KEEP_SCREEN_ON, enabled).apply()
         _keepScreenOn.value = enabled
@@ -26,6 +29,11 @@ class SettingsRepository(private val context: Context) {
     fun setAutoLaunchWidget(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_AUTO_LAUNCH, enabled).apply()
         _autoLaunchWidget.value = enabled
+    }
+
+    fun setAutoSwitchAudioApps(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_SWITCH_AUDIO_APPS, enabled).apply()
+        _autoSwitchAudioApps.value = enabled
     }
 
     fun isNotificationListenerGranted(): Boolean {
@@ -40,6 +48,7 @@ class SettingsRepository(private val context: Context) {
     companion object {
         private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
         private const val KEY_AUTO_LAUNCH = "auto_launch"
+        private const val KEY_AUTO_SWITCH_AUDIO_APPS = "auto_switch_audio_apps"
 
         @Volatile
         private var INSTANCE: SettingsRepository? = null

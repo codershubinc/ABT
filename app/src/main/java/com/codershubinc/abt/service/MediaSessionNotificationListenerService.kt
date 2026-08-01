@@ -54,22 +54,12 @@ class MediaSessionNotificationListenerService : NotificationListenerService() {
         } catch (e: Exception) {
             Log.e(TAG, "Error removing listener", e)
         }
-        repository.setActiveController(applicationContext, null)
+        repository.setActiveControllers(applicationContext, null)
     }
 
     private fun onActiveControllersChanged(controllers: List<MediaController>?) {
         Log.d(TAG, "Active media controllers changed, count: ${controllers?.size ?: 0}")
-        if (!controllers.isNullOrEmpty()) {
-            // Pick the active controller that is currently playing, or default to the first one
-            val activeController = controllers.firstOrNull { controller ->
-                val state = controller.playbackState?.state
-                state == android.media.session.PlaybackState.STATE_PLAYING
-            } ?: controllers.first()
-
-            repository.setActiveController(applicationContext, activeController)
-        } else {
-            repository.setActiveController(applicationContext, null)
-        }
+        repository.setActiveControllers(applicationContext, controllers)
     }
 
     companion object {

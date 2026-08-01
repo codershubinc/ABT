@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
                 val mediaState by mediaRepository.mediaState.collectAsState()
                 val keepScreenOn by settingsRepository.keepScreenOn.collectAsState()
                 val autoLaunchWidget by settingsRepository.autoLaunchWidget.collectAsState()
+                val autoSwitchAudioApps by settingsRepository.autoSwitchAudioApps.collectAsState()
 
                 // Dynamic Keep Screen On flag management
                 LaunchedEffect(keepScreenOn) {
@@ -88,11 +89,16 @@ class MainActivity : ComponentActivity() {
                                     isPermissionGranted = mediaState.isPermissionGranted,
                                     keepScreenOn = keepScreenOn,
                                     autoLaunchWidget = autoLaunchWidget,
+                                    autoSwitchAudioApps = autoSwitchAudioApps,
                                     onKeepScreenOnChanged = { enabled ->
                                         settingsRepository.setKeepScreenOn(enabled)
                                     },
                                     onAutoLaunchWidgetChanged = { enabled ->
                                         settingsRepository.setAutoLaunchWidget(enabled)
+                                    },
+                                    onAutoSwitchAudioAppsChanged = { enabled ->
+                                        settingsRepository.setAutoSwitchAudioApps(enabled)
+                                        mediaRepository.setAutoMode(this@MainActivity, enabled)
                                     },
                                     onNavigateToWidget = {
                                         currentScreen = ABTScreen.MUSIC_WIDGET
@@ -110,6 +116,8 @@ class MainActivity : ComponentActivity() {
                                     onSkipNext = { mediaRepository.skipToNext() },
                                     onSkipPrevious = { mediaRepository.skipToPrevious() },
                                     onSeekTo = { pos -> mediaRepository.seekTo(pos) },
+                                    onSelectApp = { pkg -> mediaRepository.selectApp(this@MainActivity, pkg) },
+                                    onSelectAutoMode = { mediaRepository.setAutoMode(this@MainActivity, true) },
                                     onNavigateToSettings = {
                                         currentScreen = ABTScreen.SETTINGS
                                     }

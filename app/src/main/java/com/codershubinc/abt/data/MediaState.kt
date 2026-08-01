@@ -2,6 +2,15 @@ package com.codershubinc.abt.data
 
 import android.graphics.Bitmap
 
+data class MediaAppInfo(
+    val packageName: String,
+    val appLabel: String,
+    val iconBitmap: Bitmap? = null,
+    val isPlaying: Boolean = false,
+    val title: String? = null,
+    val artist: String? = null
+)
+
 /**
  * Data representation of the active system media session.
  * 
@@ -22,7 +31,11 @@ data class MediaState(
     val shuffleMode: Int = 0, // PlaybackStateCompat.SHUFFLE_MODE_NONE
     val packageName: String? = null,
     val appLabel: String? = null,
-    val hasActiveSession: Boolean = false
+    val appIconBitmap: Bitmap? = null,
+    val hasActiveSession: Boolean = false,
+    val activeApps: List<MediaAppInfo> = emptyList(),
+    val isAutoMode: Boolean = true,
+    val selectedPackageName: String? = null
 ) {
     /**
      * Helper formatting getters enforcing the STRICT DATA RULE:
