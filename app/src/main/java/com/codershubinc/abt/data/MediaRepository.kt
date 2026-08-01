@@ -9,6 +9,8 @@ import android.media.session.PlaybackState
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
+import com.codershubinc.abt.utils.AppIconUtils
+import com.codershubinc.abt.utils.AudioQualityUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -23,55 +25,184 @@ class MediaRepository private constructor() {
     private val _mediaState = MutableStateFlow(MediaState())
     val mediaState: StateFlow<MediaState> = _mediaState.asStateFlow()
 
+    private var activeControllers: List<MediaController> = emptyList()
     private var activeController: MediaController? = null
     private var lastPlaybackState: PlaybackState? = null
     private val repositoryScope = CoroutineScope(Dispatchers.Default)
     private var positionTickerJob: Job? = null
 
-    private val controllerCallback = object : MediaController.Callback() {
-        override fun onMetadataChanged(metadata: MediaMetadata?) {
-            updateFromController(activeController, metadata = metadata)
-        }
-
-        override fun onPlaybackStateChanged(state: PlaybackState?) {
-            updateFromController(activeController, playbackState = state)
-        }
-
-        override fun onSessionDestroyed() {
-            Log.d(TAG, "MediaSession destroyed")
-            clearActiveController()
-        }
-
-        override fun onExtrasChanged(extras: Bundle?) {
-            updateFromController(activeController, extras = extras)
-        }
-    }
+    private var isAutoMode: Boolean = true
+    private var selectedPackageName: String? = null
+    private val iconCache = mutableMapOf<String, Bitmap>()
+    private val controllerCallbacks = mutableMapOf<MediaController, MediaController.Callback>()
 
     fun updatePermissionStatus(isGranted: Boolean) {
         _mediaState.value = _mediaState.value.copy(isPermissionGranted = isGranted)
     }
 
     fun setActiveController(context: Context, controller: MediaController?) {
-        if (activeController?.sessionToken == controller?.sessionToken && controller != null) {
-            updateFromController(controller)
+        setActiveControllers(context, if (controller != null) listOf(controller) else emptyList())
+    }
+
+    fun setActiveControllers(context: Context, controllers: List<MediaController>?) {
+        val rawControllers = controllers ?: emptyList()
+
+        // Deduplicate controllers by packageName, preferring playing ones
+        val uniqueControllers = rawControllers.groupBy { it.packageName }.map { (_, list) ->
+            list.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING } ?: list.first()
+        }
+
+        // Unregister callbacks for removed controllers
+        val currentKeys = controllerCallbacks.keys.toList()
+        for (oldCtrl in currentKeys) {
+            if (oldCtrl !in uniqueControllers) {
+                try {
+                    val cb = controllerCallbacks.remove(oldCtrl)
+                    if (cb != null) {
+                        oldCtrl.unregisterCallback(cb)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to unregister callback for ${oldCtrl.packageName}", e)
+                }
+            }
+        }
+
+        activeControllers = uniqueControllers
+
+        // Register callbacks for active controllers
+        for (controller in activeControllers) {
+            if (!controllerCallbacks.containsKey(controller)) {
+                val callback = object : MediaController.Callback() {
+                    override fun onMetadataChanged(metadata: MediaMetadata?) {
+                        updateActiveState(context)
+                    }
+
+                    override fun onPlaybackStateChanged(state: PlaybackState?) {
+                        if (state?.state == PlaybackState.STATE_PLAYING && isAutoMode) {
+                            activeController = controller
+                        }
+                        updateActiveState(context)
+                    }
+
+                    override fun onSessionDestroyed() {
+                        updateActiveState(context)
+                    }
+
+                    override fun onExtrasChanged(extras: Bundle?) {
+                        updateActiveState(context)
+                    }
+                }
+                try {
+                    controller.registerCallback(callback)
+                    controllerCallbacks[controller] = callback
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to register callback for ${controller.packageName}", e)
+                }
+            }
+        }
+
+        updateActiveState(context)
+    }
+
+    fun selectApp(context: Context, packageName: String) {
+        isAutoMode = false
+        selectedPackageName = packageName
+        val target = activeControllers.firstOrNull { it.packageName == packageName }
+        if (target != null) {
+            activeController = target
+        }
+        updateActiveState(context)
+    }
+
+    fun setAutoMode(context: Context, enabled: Boolean) {
+        isAutoMode = enabled
+        if (enabled) {
+            selectedPackageName = null
+            val playingController = activeControllers.firstOrNull {
+                it.playbackState?.state == PlaybackState.STATE_PLAYING
+            }
+            if (playingController != null) {
+                activeController = playingController
+            } else if (activeController !in activeControllers) {
+                activeController = activeControllers.firstOrNull()
+            }
+        }
+        updateActiveState(context)
+    }
+
+    private fun updateActiveState(context: Context? = null) {
+        if (activeControllers.isEmpty()) {
+            clearActiveController()
             return
         }
 
-        try {
-            activeController?.unregisterCallback(controllerCallback)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to unregister previous controller callback", e)
+        // Determine activeController based on mode
+        if (isAutoMode) {
+            val playingController = activeControllers.firstOrNull {
+                it.playbackState?.state == PlaybackState.STATE_PLAYING
+            }
+            if (playingController != null) {
+                activeController = playingController
+            } else if (activeController !in activeControllers) {
+                activeController = activeControllers.firstOrNull()
+            }
+        } else {
+            val manualController = activeControllers.firstOrNull { it.packageName == selectedPackageName }
+            if (manualController != null) {
+                activeController = manualController
+            } else {
+                // Selected app is no longer active, revert to auto mode
+                isAutoMode = true
+                selectedPackageName = null
+                activeController = activeControllers.firstOrNull {
+                    it.playbackState?.state == PlaybackState.STATE_PLAYING
+                } ?: activeControllers.firstOrNull()
+            }
         }
 
-        activeController = controller
+        // Build activeApps info list
+        val appInfoList = activeControllers.map { controller ->
+            val pkg = controller.packageName
+            val isPlaying = controller.playbackState?.state == PlaybackState.STATE_PLAYING ||
+                    controller.playbackState?.state == PlaybackState.STATE_FAST_FORWARDING ||
+                    controller.playbackState?.state == PlaybackState.STATE_REWINDING
+            val meta = controller.metadata
+            val title = meta?.getString(MediaMetadata.METADATA_KEY_TITLE)
+                ?: meta?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
+            val artist = meta?.getString(MediaMetadata.METADATA_KEY_ARTIST)
+                ?: meta?.getString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST)
 
-        if (controller != null) {
-            try {
-                controller.registerCallback(controllerCallback)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to register controller callback", e)
+            var appIcon = iconCache[pkg]
+            var label: String? = null
+            if (context != null) {
+                if (appIcon == null) {
+                    appIcon = AppIconUtils.getAppIconBitmap(context, pkg)
+                    if (appIcon != null) {
+                        iconCache[pkg] = appIcon
+                    }
+                }
+                try {
+                    val pm = context.packageManager
+                    val info = pm.getApplicationInfo(pkg, 0)
+                    label = pm.getApplicationLabel(info).toString()
+                } catch (e: Exception) {
+                    // keep label null
+                }
             }
-            updateFromController(controller, context = context)
+
+            MediaAppInfo(
+                packageName = pkg,
+                appLabel = label ?: pkg,
+                iconBitmap = appIcon ?: iconCache[pkg],
+                isPlaying = isPlaying,
+                title = title,
+                artist = artist
+            )
+        }
+
+        val currentCtrl = activeController
+        if (currentCtrl != null) {
+            updateFromController(currentCtrl, context = context, appInfoList = appInfoList)
         } else {
             clearActiveController()
         }
@@ -94,7 +225,11 @@ class MediaRepository private constructor() {
             shuffleMode = 0,
             packageName = null,
             appLabel = null,
-            hasActiveSession = false
+            appIconBitmap = null,
+            hasActiveSession = false,
+            activeApps = emptyList(),
+            isAutoMode = isAutoMode,
+            selectedPackageName = selectedPackageName
         )
     }
 
@@ -103,7 +238,8 @@ class MediaRepository private constructor() {
         metadata: MediaMetadata? = controller?.metadata,
         playbackState: PlaybackState? = controller?.playbackState,
         extras: Bundle? = controller?.extras,
-        context: Context? = null
+        context: Context? = null,
+        appInfoList: List<MediaAppInfo> = _mediaState.value.activeApps
     ) {
         if (controller == null) {
             clearActiveController()
@@ -113,7 +249,7 @@ class MediaRepository private constructor() {
         val meta = metadata ?: controller.metadata
         val pbState = playbackState ?: controller.playbackState
         lastPlaybackState = pbState
-        val ex = extras ?: controller.extras ?: meta?.let { extractExtrasFromMetadata(it) }
+        val ex = extras ?: controller.extras ?: meta?.let { AudioQualityUtils.extractExtrasFromMetadata(it) }
 
         val isPlaying = pbState?.state == PlaybackState.STATE_PLAYING ||
                 pbState?.state == PlaybackState.STATE_FAST_FORWARDING ||
@@ -131,7 +267,7 @@ class MediaRepository private constructor() {
         val artworkBitmap: Bitmap? = meta?.getBitmap(MediaMetadata.METADATA_KEY_ART)
             ?: meta?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
 
-        val soundQuality = extractAudioQuality(meta, ex)
+        val soundQuality = AudioQualityUtils.extractAudioQuality(meta, ex)
 
         val duration = meta?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
         val currentElapsed = SystemClock.elapsedRealtime()
@@ -148,7 +284,14 @@ class MediaRepository private constructor() {
 
         val pkg = controller.packageName
         var appLabel: String? = null
+        var appIcon: Bitmap? = iconCache[pkg]
         if (context != null && pkg != null) {
+            if (appIcon == null) {
+                appIcon = AppIconUtils.getAppIconBitmap(context, pkg)
+                if (appIcon != null) {
+                    iconCache[pkg] = appIcon
+                }
+            }
             try {
                 val pm = context.packageManager
                 val info = pm.getApplicationInfo(pkg, 0)
@@ -169,7 +312,11 @@ class MediaRepository private constructor() {
             durationMs = duration,
             packageName = pkg,
             appLabel = appLabel ?: _mediaState.value.appLabel,
-            hasActiveSession = true
+            appIconBitmap = appIcon ?: _mediaState.value.appIconBitmap,
+            hasActiveSession = true,
+            activeApps = appInfoList,
+            isAutoMode = isAutoMode,
+            selectedPackageName = selectedPackageName
         )
 
         if (isPlaying) {
@@ -212,87 +359,6 @@ class MediaRepository private constructor() {
     private fun stopPositionTicker() {
         positionTickerJob?.cancel()
         positionTickerJob = null
-    }
-
-    private fun extractExtrasFromMetadata(metadata: MediaMetadata): Bundle? {
-        return try {
-            val field = MediaMetadata::class.java.getDeclaredField("mBundle")
-            field.isAccessible = true
-            field.get(metadata) as? Bundle
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    private fun extractAudioQuality(metadata: MediaMetadata?, extras: Bundle?): String? {
-        val candidateBundles = mutableListOf<Bundle>()
-        extras?.let { candidateBundles.add(it) }
-        metadata?.let { extractExtrasFromMetadata(it)?.let { b -> candidateBundles.add(b) } }
-
-        for (bundle in candidateBundles) {
-            for (key in bundle.keySet()) {
-                Log.d("ABT_AudioDump", "Found Key: $key | Value: ${bundle.get(key)}")
-                val lowerKey = key.lowercase()
-                if (lowerKey.contains("quality") ||
-                    lowerKey.contains("lossless") ||
-                    lowerKey.contains("codec") ||
-                    lowerKey.contains("format") ||
-                    lowerKey.contains("atmos") ||
-                    lowerKey.contains("spatial") ||
-                    lowerKey.contains("bitrate") ||
-                    lowerKey.contains("sample_rate") ||
-                    lowerKey.contains("audio_type")
-                ) {
-                    val value = bundle.get(key)
-                    if (value != null) {
-                        val strVal = value.toString().trim()
-                        if (strVal.isNotBlank() && strVal != "0" && strVal != "false") {
-                            return formatQualityString(key, strVal)
-                        }
-                    }
-                }
-            }
-
-            // Inspect all string/boolean values in bundle for known quality indicators
-            for (key in bundle.keySet()) {
-                val valObj = bundle.get(key) ?: continue
-                val str = valObj.toString()
-                if (containsQualityKeyword(str)) {
-                    return str.uppercase()
-                }
-            }
-        }
-
-        return null
-    }
-
-    private fun containsQualityKeyword(str: String): Boolean {
-        val upper = str.uppercase()
-        return upper.contains("LOSSLESS") ||
-                upper.contains("HI-RES") ||
-                upper.contains("HIRES") ||
-                upper.contains("DOLBY") ||
-                upper.contains("ATMOS") ||
-                upper.contains("SPATIAL") ||
-                upper.contains("FLAC") ||
-                upper.contains("24-BIT") ||
-                upper.contains("96KHZ") ||
-                upper.contains("192KHZ") ||
-                upper.contains("320KBPS") ||
-                upper.contains("MASTER")
-    }
-
-    private fun formatQualityString(key: String, value: String): String {
-        val upperVal = value.uppercase()
-        if (containsQualityKeyword(upperVal)) {
-            return upperVal
-        }
-        val cleanKey = key.replace("android.media.metadata.", "")
-            .replace("com.apple.music.", "")
-            .replace("com.spotify.", "")
-            .replace("_", " ")
-            .uppercase()
-        return "$cleanKey: $upperVal"
     }
 
     // Transport Actions
