@@ -133,24 +133,6 @@ fun MusicControls(
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color.White.copy(alpha = 0.07f))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Text(
-                    text = "no data",
-                    color = Color.White.copy(alpha = 0.4f),
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
-                )
-            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -175,15 +157,17 @@ fun MusicControls(
                     tint = if (mediaState.repeatMode > 0) animatedPrimaryAccent else Color.White.copy(alpha = 0.4f),
                     modifier = Modifier.size(18.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = if (mediaState.repeatMode == 1) "ONE" else if (mediaState.repeatMode == 2) "ALL" else "no data",
-                    color = if (mediaState.repeatMode > 0) animatedPrimaryAccent else Color.White.copy(alpha = 0.4f),
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp
-                )
+                if (mediaState.repeatMode > 0) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (mediaState.repeatMode == 1) "ONE" else "ALL",
+                        color = animatedPrimaryAccent,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                }
             }
 
             // Center Controls: Skip Prev, Play/Pause, Skip Next

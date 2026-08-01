@@ -89,48 +89,55 @@ fun TrackHeader(
             Spacer(modifier = Modifier.height(2.dp))
 
             // Album
-            Text(
-                text = if (isMusicActive) mediaState.displayAlbum else "no data",
-                color = Color.White.copy(alpha = 0.4f),
-                fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Normal,
-                letterSpacing = 0.5.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            if (isMusicActive && !mediaState.album.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = mediaState.album,
+                    color = Color.White.copy(alpha = 0.4f),
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Normal,
+                    letterSpacing = 0.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(16.dp))
 
-        // Top-Right Sound Quality Vertical Stack
+        // Top-Right Sound Quality Vertical Stack (Only show active data tiles)
         Column(
-            horizontalAlignment = Alignment.End
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            val isLossless = mediaState.soundQuality?.uppercase()?.contains("LOSSLESS") == true
-            val isAtmos = mediaState.soundQuality?.uppercase()?.contains("ATMOS") == true || mediaState.soundQuality?.uppercase()?.contains("DOLBY") == true
+            val quality = mediaState.soundQuality
+            if (!quality.isNullOrBlank()) {
+                val isLossless = quality.uppercase().contains("LOSSLESS")
+                GeometricQualityBadge(
+                    text = if (isLossless) "LOSSLESS" else quality.uppercase(),
+                    active = true,
+                    accentColor = animatedPrimaryAccent
+                )
+            }
 
-            GeometricQualityBadge(
-                text = if (isLossless) "LOSSLESS" else if (mediaState.soundQuality != null) mediaState.soundQuality.uppercase() else "no data",
-                active = mediaState.soundQuality != null,
-                accentColor = animatedPrimaryAccent
-            )
+            val isAtmos = quality?.uppercase()?.contains("ATMOS") == true ||
+                    quality?.uppercase()?.contains("DOLBY") == true
+            if (isAtmos) {
+                GeometricQualityBadge(
+                    text = "DOLBY ATMOS",
+                    active = true,
+                    accentColor = animatedSecondaryAccent
+                )
+            }
 
-            Spacer(modifier = Modifier.height(6.dp))
-
-            GeometricQualityBadge(
-                text = if (isAtmos) "DOLBY ATMOS" else "no data",
-                active = isAtmos,
-                accentColor = animatedSecondaryAccent
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            GeometricQualityBadge(
-                text = if (mediaState.packageName != null) "SRC: ${mediaState.displaySourceApp.uppercase()}" else "no data",
-                active = mediaState.packageName != null,
-                accentColor = Color.White.copy(alpha = 0.3f)
-            )
+            if (mediaState.packageName != null) {
+                GeometricQualityBadge(
+                    text = "SRC: ${mediaState.displaySourceApp.uppercase()}",
+                    active = true,
+                    accentColor = Color.White.copy(alpha = 0.3f)
+                )
+            }
         }
     }
 }

@@ -54,7 +54,10 @@ data class MediaState(
         get() = soundQuality?.takeIf { it.isNotBlank() } ?: "no data"
 
     val displaySourceApp: String
-        get() = appLabel?.takeIf { it.isNotBlank() }
-            ?: packageName?.takeIf { it.isNotBlank() }
-            ?: "no data"
+        get() {
+            if (packageName == "org.kde.kdeconnect_tp") return "KDE CONNECT"
+            return appLabel?.takeIf { it.isNotBlank() }
+                ?: packageName?.takeIf { it.isNotBlank() }
+                ?: "no data"
+        }
 }
